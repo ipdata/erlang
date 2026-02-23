@@ -62,7 +62,7 @@ http_options(Timeout) ->
      {connect_timeout, Timeout},
      {ssl, ssl_options()}].
 
--spec ssl_options() -> list().
+-spec ssl_options() -> [ssl:tls_client_option()].
 ssl_options() ->
     [{verify, verify_peer},
      {depth, 100},
