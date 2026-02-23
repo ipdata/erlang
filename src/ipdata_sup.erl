@@ -26,7 +26,7 @@ start_link() ->
 %% @doc Initialize the supervisor with no children.
 %% @end
 %%--------------------------------------------------------------------
--spec init(term()) -> {ok, {supervisor:sup_flags(), [supervisor:child_spec()]}}.
+-spec init([]) -> {ok, {supervisor:sup_flags(), []}}.
 init([]) ->
     SupFlags = #{strategy => one_for_one,
                  intensity => 1,

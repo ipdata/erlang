@@ -45,6 +45,18 @@
     timeout => pos_integer()
 }.
 
+-type lookup_error() :: {json_error, term()}
+                      | {request_failed, term()}
+                      | {http_error, non_neg_integer(), binary()}.
+
+-type bulk_error() :: lookup_error()
+                    | {invalid_input, binary()}.
+
+%% bulk/2 delegates to bulk/3 whose invalid_input messages are constant
+%% binaries; dialyzer infers their exact byte-size which is narrower than
+%% binary(). There is no readable type for "binary of at least N bytes".
+-dialyzer({no_underspecs, bulk/2}).
+
 -define(DEFAULT_ENDPOINT, <<"https://api.ipdata.co">>).
 -define(EU_ENDPOINT, <<"https://eu-api.ipdata.co">>).
 -define(DEFAULT_TIMEOUT, 5000).
@@ -86,7 +98,7 @@ new(_ApiKey, _Opts) ->
 %% @doc Look up the IP address of the calling machine.
 %% @end
 %%--------------------------------------------------------------------
--spec lookup(Client :: client()) -> {ok, map()} | {error, term()}.
+-spec lookup(Client :: client()) -> {ok, #{atom() | binary() => term()}} | {error, lookup_error()}.
 lookup(Client) ->
     lookup(Client, <<>>, []).
 
@@ -97,7 +109,7 @@ lookup(Client) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec lookup(Client :: client(), IP :: binary()) ->
-    {ok, map()} | {error, term()}.
+    {ok, #{atom() | binary() => term()}} | {error, lookup_error()}.
 lookup(Client, IP) ->
     lookup(Client, IP, []).
 
@@ -114,7 +126,7 @@ lookup(Client, IP) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec lookup(Client :: client(), IP :: binary(), Fields :: [binary()]) ->
-    {ok, map()} | {error, term()}.
+    {ok, #{atom() | binary() => term()}} | {error, lookup_error()}.
 lookup(#{api_key := ApiKey, endpoint := Endpoint, timeout := Timeout}, IP, Fields) ->
     Path = case IP of
                <<>> -> <<>>;
@@ -130,7 +142,7 @@ lookup(#{api_key := ApiKey, endpoint := Endpoint, timeout := Timeout}, IP, Field
 %% @end
 %%--------------------------------------------------------------------
 -spec bulk(Client :: client(), IPs :: [binary()]) ->
-    {ok, [map()]} | {error, term()}.
+    {ok, [map()]} | {error, bulk_error()}.
 bulk(Client, IPs) ->
     bulk(Client, IPs, []).
 
@@ -147,7 +159,7 @@ bulk(Client, IPs) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec bulk(Client :: client(), IPs :: [binary()], Fields :: [binary()]) ->
-    {ok, [map()]} | {error, term()}.
+    {ok, [map()]} | {error, bulk_error()}.
 bulk(_Client, [], _Fields) ->
     {error, {invalid_input, <<"At least one IP address is required">>}};
 bulk(_Client, IPs, _Fields) when length(IPs) > ?MAX_BULK_IPS ->
@@ -166,7 +178,7 @@ resolve_endpoint(eu) -> ?EU_ENDPOINT;
 resolve_endpoint(URL) when is_binary(URL) -> URL.
 
 -spec build_url(Endpoint :: binary(), Path :: binary(),
-                ApiKey :: binary(), Fields :: [binary()]) -> binary().
+                ApiKey :: binary(), Fields :: [binary()]) -> <<_:64, _:_*8>>.
 build_url(Endpoint, Path, ApiKey, Fields) ->
     Base = <<Endpoint/binary, Path/binary, "?api-key=", ApiKey/binary>>,
     case Fields of
