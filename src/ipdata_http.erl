@@ -84,7 +84,7 @@ handle_response({ok, {{_, StatusCode, _}, _RespHeaders, Body}}) ->
 handle_response({error, Reason}) ->
     {error, {request_failed, Reason}}.
 
--spec extract_error_message(binary()) -> binary().
+-spec extract_error_message(term()) -> binary().
 extract_error_message(Body) when is_binary(Body), byte_size(Body) > 0 ->
     try jsx:decode(Body, [return_maps]) of
         #{<<"message">> := Msg} -> Msg;

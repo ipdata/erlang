@@ -70,7 +70,7 @@ new(ApiKey) ->
 %% </ul>
 %% @end
 %%--------------------------------------------------------------------
--spec new(ApiKey :: binary(), Opts :: opts()) -> {ok, client()} | {error, term()}.
+-spec new(ApiKey :: term(), Opts :: term()) -> {ok, client()} | {error, term()}.
 new(<<>>, _Opts) ->
     {error, {invalid_input, <<"API key must not be empty">>}};
 new(ApiKey, Opts) when is_binary(ApiKey), is_map(Opts) ->
