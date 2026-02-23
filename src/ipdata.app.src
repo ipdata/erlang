@@ -1,0 +1,20 @@
+{application, ipdata, [
+    {description, "Erlang client library for the ipdata.co IP geolocation API"},
+    {vsn, "1.0.0"},
+    {registered, []},
+    {mod, {ipdata_app, []}},
+    {applications, [
+        kernel,
+        stdlib,
+        inets,
+        ssl,
+        jsx
+    ]},
+    {env, []},
+    {modules, []},
+    {licenses, ["MIT"]},
+    {links, [
+        {"GitHub", "https://github.com/ipdata/erlang"},
+        {"ipdata.co", "https://ipdata.co"}
+    ]}
+]}.

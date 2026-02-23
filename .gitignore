@@ -1,0 +1,15 @@
+.rebar3/
+_build/
+_checkouts/
+ebin/
+log/
+rebar3.crashdump
+rebar.lock
+*.beam
+*.o
+*.plt
+*.swp
+*~
+.eunit/
+.idea/
+*.iml
