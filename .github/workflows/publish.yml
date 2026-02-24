@@ -1,11 +1,9 @@
-name: CI
+name: Publish to Hex.pm
 
 on:
   push:
-    branches: ['*']
-    tags: ['v*']
-  pull_request:
-    branches: [main]
+    tags:
+      - 'v*'
 
 jobs:
   test:
@@ -44,7 +42,6 @@ jobs:
   publish:
     name: Publish to Hex.pm
     needs: test
-    if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -64,7 +61,7 @@ jobs:
           restore-keys: ${{ runner.os }}-otp-27-build-
 
       - name: Publish to Hex.pm
-        run: rebar3 hex publish --yes
+        run: rebar3 hex publish --yes --key "$HEX_API_KEY"
         env:
           HEX_API_KEY: ${{ secrets.HEX_API_KEY }}
 
@@ -72,6 +69,6 @@ jobs:
         run: rebar3 ex_doc
 
       - name: Publish docs
-        run: rebar3 hex docs publish --yes
+        run: rebar3 hex docs publish --yes --key "$HEX_API_KEY"
         env:
           HEX_API_KEY: ${{ secrets.HEX_API_KEY }}
