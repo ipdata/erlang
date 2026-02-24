@@ -60,23 +60,14 @@ jobs:
           key: ${{ runner.os }}-otp-27-build-${{ hashFiles('rebar.config') }}
           restore-keys: ${{ runner.os }}-otp-27-build-
 
-      - name: Check HEX_API_KEY
-        run: |
-          if [ -z "$HEX_API_KEY" ]; then
-            echo "::error::HEX_API_KEY secret is not set. Go to repo Settings > Secrets and variables > Actions and add a HEX_API_KEY secret with a valid hex.pm write key."
-            exit 1
-          fi
-        env:
-          HEX_API_KEY: ${{ secrets.HEX_API_KEY }}
-
       - name: Publish to Hex.pm
-        run: rebar3 hex publish --yes
+        run: rebar3 hex publish --repo hexpm --yes
         env:
           HEX_API_KEY: ${{ secrets.HEX_API_KEY }}
 
       - name: Generate and publish docs
         run: |
           rebar3 ex_doc
-          rebar3 hex docs publish --yes
+          rebar3 hex docs publish --repo hexpm --yes
         env:
           HEX_API_KEY: ${{ secrets.HEX_API_KEY }}
