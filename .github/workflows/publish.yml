@@ -1,9 +1,11 @@
-name: Publish to Hex.pm
+name: CI
 
 on:
   push:
-    tags:
-      - 'v*'
+    branches: ['*']
+    tags: ['v*']
+  pull_request:
+    branches: [main]
 
 jobs:
   test:
@@ -42,6 +44,7 @@ jobs:
   publish:
     name: Publish to Hex.pm
     needs: test
+    if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
     permissions:
       contents: read
