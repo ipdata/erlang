@@ -1,9 +1,11 @@
-name: Publish to Hex.pm
+name: CI
 
 on:
   push:
-    tags:
-      - 'v*'
+    branches: ['*']
+    tags: ['v*']
+  pull_request:
+    branches: [main]
 
 jobs:
   test:
