@@ -1,11 +1,9 @@
-name: CI
+name: Publish to Hex.pm
 
 on:
   push:
-    branches: ['*']
-    tags: ['v*']
-  pull_request:
-    branches: [main]
+    tags:
+      - 'v*'
 
 jobs:
   test:
@@ -49,16 +47,13 @@ jobs:
       contents: read
     steps:
       - uses: actions/checkout@v4
-        if: startsWith(github.ref, 'refs/tags/v')
 
       - uses: erlef/setup-beam@v1
-        if: startsWith(github.ref, 'refs/tags/v')
         with:
           otp-version: '27'
           rebar3-version: '3.24'
 
       - name: Restore dependencies cache
-        if: startsWith(github.ref, 'refs/tags/v')
         uses: actions/cache@v4
         with:
           path: _build
@@ -66,17 +61,14 @@ jobs:
           restore-keys: ${{ runner.os }}-otp-27-build-
 
       - name: Publish to Hex.pm
-        if: startsWith(github.ref, 'refs/tags/v')
-        run: rebar3 hex publish --yes
+        run: rebar3 hex publish --yes --key "$HEX_API_KEY"
         env:
           HEX_API_KEY: ${{ secrets.HEX_API_KEY }}
 
       - name: Generate docs
-        if: startsWith(github.ref, 'refs/tags/v')
         run: rebar3 ex_doc
 
       - name: Publish docs
-        if: startsWith(github.ref, 'refs/tags/v')
-        run: rebar3 hex docs publish --yes
+        run: rebar3 hex docs publish --yes --key "$HEX_API_KEY"
         env:
           HEX_API_KEY: ${{ secrets.HEX_API_KEY }}
