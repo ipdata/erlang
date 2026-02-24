@@ -61,7 +61,7 @@ jobs:
           restore-keys: ${{ runner.os }}-otp-27-build-
 
       - name: Publish to Hex.pm
-        run: rebar3 hex publish --yes --key "$HEX_API_KEY"
+        run: rebar3 hex publish --yes
         env:
           HEX_API_KEY: ${{ secrets.HEX_API_KEY }}
 
@@ -69,6 +69,6 @@ jobs:
         run: rebar3 ex_doc
 
       - name: Publish docs
-        run: rebar3 hex docs publish --yes --key "$HEX_API_KEY"
+        run: rebar3 hex docs publish --yes
         env:
           HEX_API_KEY: ${{ secrets.HEX_API_KEY }}
