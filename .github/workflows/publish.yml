@@ -66,8 +66,6 @@ jobs:
           HEX_API_KEY: ${{ secrets.HEX_API_KEY }}
 
       - name: Generate and publish docs
-        run: |
-          rebar3 ex_doc
-          rebar3 hex docs publish --repo hexpm --yes
+        run: rebar3 hex publish docs --repo hexpm --yes
         env:
           HEX_API_KEY: ${{ secrets.HEX_API_KEY }}
