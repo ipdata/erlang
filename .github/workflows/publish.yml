@@ -68,10 +68,69 @@ jobs:
       - name: Run xref
         run: rebar3 xref
 
+  release:
+    name: Tag and release
+    needs: test
+    # Only a push to the default branch can create a release: pull requests
+    # and tag pushes skip this job.
+    if: github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    concurrency:
+      group: release
+      cancel-in-progress: false
+    outputs:
+      tag: ${{ steps.version.outputs.tag }}
+      created: ${{ steps.release.outputs.created }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Read the version
+        id: version
+        run: |
+          version="$(sed -nE 's/.*\{vsn, *"([^"]+)".*/\1/p' src/ipdata.app.src | head -1)"
+          if [ -z "$version" ]; then
+            echo "::error file=src/ipdata.app.src::no vsn found"
+            exit 1
+          fi
+          echo "tag=v$version" >> "$GITHUB_OUTPUT"
+
+      - name: Create the tag and the GitHub release
+        id: release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.version.outputs.tag }}
+        run: |
+          # git ls-remote --exit-code exits with 2 when the tag does not exist.
+          status=0
+          git ls-remote --exit-code --tags origin "refs/tags/$TAG" >/dev/null || status=$?
+          case "$status" in
+            0)
+              echo "Tag $TAG already exists; nothing to release."
+              echo "created=false" >> "$GITHUB_OUTPUT"
+              exit 0
+              ;;
+            2)
+              ;;
+            *)
+              echo "::error::git ls-remote failed with status $status"
+              exit "$status"
+              ;;
+          esac
+          gh release create "$TAG" --target "$GITHUB_SHA" --title "$TAG" --generate-notes
+          echo "created=true" >> "$GITHUB_OUTPUT"
+
   publish:
     name: Publish to Hex.pm
-    needs: test
-    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [test, release]
+    # A tag created by the release job with the workflow's own token does not
+    # start another run, so the package is published here, in the same run.
+    # A tag pushed by hand is published too; the release job is skipped then,
+    # which is why the condition does not rely on the implicit success().
+    if: >-
+      ${{ !cancelled() && needs.test.result == 'success' &&
+          (needs.release.outputs.created == 'true' || startsWith(github.ref, 'refs/tags/v')) }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
