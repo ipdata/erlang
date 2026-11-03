@@ -21,6 +21,10 @@ jobs:
         # supports it: 3.24 is the last one for OTP 25, 3.25 the last one
         # for OTP 26, and 3.28 covers OTP 27 and later.
         #
+        # OTP 29 is not listed yet: the test dependency meck 0.9.2 does not
+        # compile there (its bare `catch` is deprecated in OTP 29), and the
+        # meck releases that do compile dropped OTP 25.
+        #
         # ubuntu-latest resolves to Ubuntu 26.04, for which no OTP 25 builds
         # are published (erlef/setup-beam supports OTP 26+ there and 24.3+ on
         # ubuntu-24.04), so the OTP 25 job runs on ubuntu-24.04.
@@ -35,9 +39,6 @@ jobs:
             rebar3: '3.28'
             os: ubuntu-latest
           - otp: '28'
-            rebar3: '3.28'
-            os: ubuntu-latest
-          - otp: '29'
             rebar3: '3.28'
             os: ubuntu-latest
     steps:
