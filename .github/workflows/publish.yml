@@ -1,4 +1,4 @@
-name: Publish to Hex.pm
+name: CI
 
 on:
   push:
@@ -13,31 +13,48 @@ jobs:
     name: Test
     runs-on: ${{ matrix.os }}
     strategy:
+      # Let every OTP release report its own result instead of cancelling
+      # the remaining jobs as soon as one of them fails.
+      fail-fast: false
       matrix:
+        # Each OTP release is paired with the newest rebar3 release that
+        # supports it: 3.24 is the last one for OTP 25, 3.25 the last one
+        # for OTP 26, and 3.28 covers OTP 27 and later.
+        #
+        # OTP 29 is not listed yet: the test dependency meck 0.9.2 does not
+        # compile there (its bare `catch` is deprecated in OTP 29), and the
+        # meck releases that do compile dropped OTP 25.
+        #
         # ubuntu-latest resolves to Ubuntu 26.04, for which no OTP 25 builds
         # are published (erlef/setup-beam supports OTP 26+ there and 24.3+ on
         # ubuntu-24.04), so the OTP 25 job runs on ubuntu-24.04.
         include:
           - otp: '25'
+            rebar3: '3.24'
             os: ubuntu-24.04
           - otp: '26'
+            rebar3: '3.25'
             os: ubuntu-latest
           - otp: '27'
+            rebar3: '3.28'
+            os: ubuntu-latest
+          - otp: '28'
+            rebar3: '3.28'
             os: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - uses: erlef/setup-beam@v1
         with:
           otp-version: ${{ matrix.otp }}
-          rebar3-version: '3.24'
+          rebar3-version: ${{ matrix.rebar3 }}
 
       - name: Restore dependencies cache
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: _build
-          key: ${{ runner.os }}-otp-${{ matrix.otp }}-build-${{ hashFiles('rebar.config') }}
-          restore-keys: ${{ runner.os }}-otp-${{ matrix.otp }}-build-
+          key: ${{ runner.os }}-otp-${{ matrix.otp }}-rebar3-${{ matrix.rebar3 }}-build-${{ hashFiles('rebar.config') }}
+          restore-keys: ${{ runner.os }}-otp-${{ matrix.otp }}-rebar3-${{ matrix.rebar3 }}-build-
 
       - name: Compile
         run: rebar3 compile
@@ -59,19 +76,19 @@ jobs:
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - uses: erlef/setup-beam@v1
         with:
           otp-version: '27'
-          rebar3-version: '3.24'
+          rebar3-version: '3.28'
 
       - name: Restore dependencies cache
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: _build
-          key: ${{ runner.os }}-otp-27-build-${{ hashFiles('rebar.config') }}
-          restore-keys: ${{ runner.os }}-otp-27-build-
+          key: ${{ runner.os }}-otp-27-rebar3-3.28-build-${{ hashFiles('rebar.config') }}
+          restore-keys: ${{ runner.os }}-otp-27-rebar3-3.28-build-
 
       - name: Publish to Hex.pm
         run: rebar3 hex publish --repo hexpm --yes

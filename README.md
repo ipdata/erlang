@@ -79,23 +79,25 @@ maps:get(<<"country_name">>, Result).
 %% Access response fields
 maps:get(<<"ip">>, Result).           %% => <<"8.8.8.8">>
 maps:get(<<"country_name">>, Result). %% => <<"United States">>
-maps:get(<<"city">>, Result).         %% => <<"Ashburn">>
-maps:get(<<"latitude">>, Result).     %% => 39.03
-maps:get(<<"longitude">>, Result).    %% => -77.5
+maps:get(<<"country_code">>, Result). %% => <<"US">>
+
+%% Fields the API has no data for are null. 8.8.8.8 is an anycast address
+%% located at country level only, so it has no city and country-level coordinates.
+maps:get(<<"city">>, Result).         %% => null
+maps:get(<<"latitude">>, Result).     %% => 39.7599983215332
+maps:get(<<"longitude">>, Result).    %% => -98.5
 
 %% Nested data
 ASN = maps:get(<<"asn">>, Result).
 maps:get(<<"name">>, ASN).            %% => <<"Google LLC">>
 
 Threat = maps:get(<<"threat">>, Result).
-maps:get(<<"is_vpn">>, Threat).       %% => false
+maps:get(<<"is_vpn">>, Threat).        %% => false
+maps:get(<<"is_datacenter">>, Threat). %% => true
 
 %% Flags the API includes only when they are true: read them with a default
 maps:get(<<"is_anycast">>, Result, false).   %% => true
 maps:get(<<"is_satellite">>, Result, false). %% => false
-
-TimeZone = maps:get(<<"time_zone">>, Result).
-maps:get(<<"name">>, TimeZone).       %% => <<"America/New_York">>
 ```
 
 ### Filter Response Fields
@@ -144,7 +146,7 @@ end.
 
 ## Connection reuse
 
-The `ipdata` application owns a dedicated `httpc` profile, also named `ipdata`, that keeps persistent HTTPS connections (HTTP/1.1 keep-alive) to the API for as long as the application runs. Start the application once per node and keep it running: every lookup from every process then goes out on an already established connection instead of paying a new TCP and TLS handshake (roughly 660 to 980 ms for a cold connection to api.ipdata.co against 220 to 300 ms for a request on a reused one). Idle connections are closed after 60 seconds. HTTP/2 is not available with `httpc`, so the saving is the TLS handshake, not multiplexing; an HTTP/2 client such as `gun` would need a connection-owner process and a new client lifecycle, which is out of scope for this library. TLS 1.3 session tickets are enabled so that a connection opened after the idle timeout can resume the previous TLS session.
+The `ipdata` application owns a dedicated `httpc` profile, also named `ipdata`, that keeps persistent HTTPS connections (HTTP/1.1 keep-alive) to the API for as long as the application runs. Start the application once per node and keep it running: every lookup from every process then goes out on an already established connection. A new connection pays a TCP and TLS handshake; a request on a reused connection does not. Idle connections are closed after 60 seconds. HTTP/2 is not available with `httpc`, so the saving is the TLS handshake, not multiplexing; an HTTP/2 client such as `gun` would need a connection-owner process and a new client lifecycle, which is out of scope for this library. TLS 1.3 session tickets are enabled so that a connection opened after the idle timeout can resume the previous TLS session.
 
 A client map returned by `ipdata:new/1,2` is plain immutable data: it holds no process, socket or other resource, so it can be shared freely between processes, kept in application state or rebuilt at any time, and there is nothing to close. `application:stop(ipdata)` stops the profile and closes its connections. If a request is made before the application has been started, the profile is started on demand (`inets` and `ssl` must be running).
 
