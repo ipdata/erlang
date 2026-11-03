@@ -32,6 +32,10 @@ all() ->
      post_retries_once_on_socket_closed_remotely,
      post_retries_only_once,
      post_does_not_retry_http_errors,
+     decode_satellite_response,
+     decode_anycast_response_with_dated_blocklists,
+     decode_blocklist_entry_without_dates,
+     decode_bulk_items_with_new_fields,
      not_started_starts_profile_and_retries,
      not_started_noproc_exit_starts_profile_and_retries,
      not_started_profile_start_failure_is_request_failed,
@@ -228,6 +232,91 @@ post_does_not_retry_http_errors(_Config) ->
     ?assert(meck:validate(httpc)).
 
 %%--------------------------------------------------------------------
+%% New response fields: is_satellite, is_anycast and dated blocklist
+%% entries. The fixtures are the API's own samples; the library passes
+%% the decoded JSON through unchanged, and the API includes the two
+%% flags only when they are true.
+%%--------------------------------------------------------------------
+
+decode_satellite_response(Config) ->
+    expect_response(get, 200, fixture(Config, "satellite.json")),
+    {ok, R} = ipdata_http:get("https://api.ipdata.co/98.97.34.0?api-key=test", [], 5000),
+    ?assertEqual(<<"98.97.34.0">>, maps:get(<<"ip">>, R)),
+    ?assertEqual(true, maps:get(<<"is_satellite">>, R)),
+    ?assertEqual(false, maps:get(<<"is_eu">>, R)),
+    %% is_anycast is omitted by the API when false: read it with a default
+    ?assertNot(maps:is_key(<<"is_anycast">>, R)),
+    ?assertEqual(false, maps:get(<<"is_anycast">>, R, false)),
+    ?assertEqual(<<"AS14593">>, maps:get(<<"asn">>, maps:get(<<"asn">>, R))),
+    ?assertEqual([], maps:get(<<"blocklists">>, maps:get(<<"threat">>, R))),
+    ?assert(meck:validate(httpc)).
+
+decode_anycast_response_with_dated_blocklists(Config) ->
+    expect_response(get, 200, fixture(Config, "anycast.json")),
+    {ok, R} = ipdata_http:get("https://api.ipdata.co/8.8.8.8?api-key=test", [], 5000),
+    ?assertEqual(true, maps:get(<<"is_anycast">>, R)),
+    ?assertNot(maps:is_key(<<"is_satellite">>, R)),
+    ?assertEqual(false, maps:get(<<"is_satellite">>, R, false)),
+    ?assertEqual(null, maps:get(<<"city">>, R)),
+    %% non-ASCII strings survive decoding (U+1F1FA U+1F1F8 as UTF-8)
+    ?assertEqual(<<240, 159, 135, 186, 240, 159, 135, 184>>,
+                 maps:get(<<"emoji_flag">>, R)),
+    Threat = maps:get(<<"threat">>, R),
+    ?assertEqual(true, maps:get(<<"is_datacenter">>, Threat)),
+    [Cloud, Resolvers] = maps:get(<<"blocklists">>, Threat),
+    ?assertEqual(#{<<"name">> => <<"ipdata">>,
+                   <<"site">> => <<"https://ipdata.co">>,
+                   <<"type">> => <<"cloud">>,
+                   <<"days_seen">> => 1,
+                   <<"first_seen">> => <<"2026-11-02">>,
+                   <<"last_seen">> => <<"2026-11-02">>}, Cloud),
+    ?assertEqual(<<"open_resolvers">>, maps:get(<<"type">>, Resolvers)),
+    %% the dates stay YYYY-MM-DD binaries; they are not parsed
+    ?assertEqual(<<"2026-11-02">>, maps:get(<<"last_seen">>, Resolvers)),
+    ?assertEqual(2, maps:get(<<"trust_score">>, maps:get(<<"scores">>, Threat))),
+    ?assert(meck:validate(httpc)).
+
+decode_blocklist_entry_without_dates(Config) ->
+    expect_response(get, 200, fixture(Config, "vpn_exit.json")),
+    {ok, R} = ipdata_http:get("https://api.ipdata.co/187.13.250.1?api-key=test", [], 5000),
+    ?assertNot(maps:is_key(<<"is_satellite">>, R)),
+    ?assertNot(maps:is_key(<<"is_anycast">>, R)),
+    Threat = maps:get(<<"threat">>, R),
+    ?assertEqual(true, maps:get(<<"is_vpn">>, Threat)),
+    Blocklists = maps:get(<<"blocklists">>, Threat),
+    ?assertEqual(6, length(Blocklists)),
+    [Gluetun, _Cloud, IpdataVpn | _] = Blocklists,
+    ?assertMatch(#{<<"name">> := <<"Gluetun">>, <<"type">> := <<"vpn">>,
+                   <<"days_seen">> := 2,
+                   <<"first_seen">> := <<"2026-10-31">>,
+                   <<"last_seen">> := <<"2026-11-02">>}, Gluetun),
+    %% ipdata's own vpn feed carries none of the three dated fields
+    ?assertEqual(#{<<"name">> => <<"ipdata">>,
+                   <<"site">> => <<"https://ipdata.co">>,
+                   <<"type">> => <<"vpn">>}, IpdataVpn),
+    ?assertEqual(undefined, maps:get(<<"days_seen">>, IpdataVpn, undefined)),
+    ?assert(meck:validate(httpc)).
+
+%% Bulk responses carry the same shape per item.
+decode_bulk_items_with_new_fields(Config) ->
+    Body = <<"[", (fixture(Config, "satellite.json"))/binary, ",",
+                  (fixture(Config, "anycast.json"))/binary, ",",
+                  (fixture(Config, "vpn_exit.json"))/binary, "]">>,
+    expect_response(post, 200, Body),
+    {ok, [Satellite, Anycast, Vpn]} =
+        ipdata_http:post("https://api.ipdata.co/bulk?api-key=test", [],
+                         [<<"98.97.34.0">>, <<"8.8.8.8">>, <<"187.13.250.1">>], 5000),
+    ?assertEqual(true, maps:get(<<"is_satellite">>, Satellite)),
+    ?assertEqual(false, maps:get(<<"is_anycast">>, Satellite, false)),
+    ?assertEqual(true, maps:get(<<"is_anycast">>, Anycast)),
+    ?assertEqual(false, maps:get(<<"is_satellite">>, Anycast, false)),
+    ?assertEqual(false, maps:get(<<"is_satellite">>, Vpn, false)),
+    ?assertEqual(false, maps:get(<<"is_anycast">>, Vpn, false)),
+    [_, _, IpdataVpn | _] = maps:get(<<"blocklists">>, maps:get(<<"threat">>, Vpn)),
+    ?assertNot(maps:is_key(<<"first_seen">>, IpdataVpn)),
+    ?assert(meck:validate(httpc)).
+
+%%--------------------------------------------------------------------
 %% Profile lifecycle from the request path
 %%--------------------------------------------------------------------
 
@@ -326,6 +415,11 @@ request_args() ->
 stop_profile() ->
     _ = inets:stop(httpc, ipdata),
     ok.
+
+%% Raw JSON of an API sample from the suite's data directory.
+fixture(Config, Name) ->
+    {ok, Body} = file:read_file(filename:join(?config(data_dir, Config), Name)),
+    Body.
 
 assert_profile_running() ->
     ?assertMatch({error, {already_started, _}},

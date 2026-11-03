@@ -32,7 +32,10 @@ all() ->
      bulk_lookup_with_fields,
      bulk_empty_list_rejected,
      bulk_too_many_ips_rejected,
-     bulk_api_error].
+     bulk_api_error,
+     lookup_returns_new_fields_unchanged,
+     lookup_with_new_field_names,
+     bulk_with_new_field_names].
 
 init_per_suite(Config) ->
     application:ensure_all_started(meck),
@@ -192,8 +195,91 @@ bulk_api_error(_Config) ->
     ?assert(meck:validate(ipdata_http)).
 
 %%--------------------------------------------------------------------
+%% New response fields
+%%--------------------------------------------------------------------
+
+%% is_satellite, is_anycast and the dated blocklist entries reach the
+%% caller exactly as decoded: the API omits the two flags when false and
+%% some feeds omit the dates, so absent keys stay absent.
+lookup_returns_new_fields_unchanged(_Config) ->
+    MockResponse = satellite_ip_response(),
+    meck:expect(ipdata_http, get,
+                fun("https://api.ipdata.co/98.97.34.0?api-key=test-key", [], 5000) ->
+                        {ok, MockResponse}
+                end),
+    {ok, Client} = ipdata:new(<<"test-key">>),
+    {ok, Result} = ipdata:lookup(Client, <<"98.97.34.0">>),
+    ?assertEqual(MockResponse, Result),
+    ?assertEqual(true, maps:get(<<"is_satellite">>, Result)),
+    ?assertNot(maps:is_key(<<"is_anycast">>, Result)),
+    ?assertEqual(false, maps:get(<<"is_anycast">>, Result, false)),
+    [Dated, Undated] = maps:get(<<"blocklists">>, maps:get(<<"threat">>, Result)),
+    ?assertEqual(<<"2026-10-31">>, maps:get(<<"first_seen">>, Dated)),
+    ?assertEqual(2, maps:get(<<"days_seen">>, Dated)),
+    ?assertEqual(undefined, maps:get(<<"first_seen">>, Undated, undefined)),
+    ?assert(meck:validate(ipdata_http)).
+
+%% The new names are valid field names for the fields parameter.
+lookup_with_new_field_names(_Config) ->
+    MockResponse = #{<<"ip">> => <<"8.8.8.8">>, <<"is_anycast">> => true},
+    meck:expect(ipdata_http, get,
+                fun("https://api.ipdata.co/8.8.8.8?api-key=test-key&fields=ip,is_satellite,is_anycast",
+                    [], 5000) ->
+                        {ok, MockResponse}
+                end),
+    {ok, Client} = ipdata:new(<<"test-key">>),
+    {ok, Result} = ipdata:lookup(Client, <<"8.8.8.8">>,
+                                 [<<"ip">>, <<"is_satellite">>, <<"is_anycast">>]),
+    ?assertEqual(true, maps:get(<<"is_anycast">>, Result)),
+    ?assertEqual(false, maps:get(<<"is_satellite">>, Result, false)),
+    ?assert(meck:validate(ipdata_http)).
+
+bulk_with_new_field_names(_Config) ->
+    MockResponse = [#{<<"ip">> => <<"98.97.34.0">>, <<"is_satellite">> => true},
+                    #{<<"ip">> => <<"8.8.8.8">>, <<"is_anycast">> => true}],
+    meck:expect(ipdata_http, post,
+                fun("https://api.ipdata.co/bulk?api-key=test-key&fields=ip,is_satellite,is_anycast",
+                    [], [<<"98.97.34.0">>, <<"8.8.8.8">>], 5000) ->
+                        {ok, MockResponse}
+                end),
+    {ok, Client} = ipdata:new(<<"test-key">>),
+    {ok, [Satellite, Anycast]} =
+        ipdata:bulk(Client, [<<"98.97.34.0">>, <<"8.8.8.8">>],
+                    [<<"ip">>, <<"is_satellite">>, <<"is_anycast">>]),
+    ?assertEqual(true, maps:get(<<"is_satellite">>, Satellite)),
+    ?assertEqual(false, maps:get(<<"is_anycast">>, Satellite, false)),
+    ?assertEqual(true, maps:get(<<"is_anycast">>, Anycast)),
+    ?assertEqual(false, maps:get(<<"is_satellite">>, Anycast, false)),
+    ?assert(meck:validate(ipdata_http)).
+
+%%--------------------------------------------------------------------
 %% Helpers
 %%--------------------------------------------------------------------
+
+%% Decoded shape of a satellite ISP response (is_anycast omitted) whose
+%% blocklist has one dated entry and one from a feed without dates.
+satellite_ip_response() ->
+    #{<<"ip">> => <<"98.97.34.0">>,
+      <<"is_satellite">> => true,
+      <<"is_eu">> => false,
+      <<"city">> => <<"Seattle">>,
+      <<"country_code">> => <<"US">>,
+      <<"threat">> => #{
+          <<"is_vpn">> => false,
+          <<"is_threat">> => false,
+          <<"blocklists">> => [
+              #{<<"name">> => <<"Gluetun">>,
+                <<"site">> => <<"https://github.com/qdm12/gluetun">>,
+                <<"type">> => <<"vpn">>,
+                <<"days_seen">> => 2,
+                <<"first_seen">> => <<"2026-10-31">>,
+                <<"last_seen">> => <<"2026-11-02">>},
+              #{<<"name">> => <<"ipdata">>,
+                <<"site">> => <<"https://ipdata.co">>,
+                <<"type">> => <<"vpn">>}
+          ]
+      },
+      <<"count">> => <<"0">>}.
 
 sample_ip_response() ->
     #{<<"ip">> => <<"8.8.8.8">>,

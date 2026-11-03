@@ -90,6 +90,10 @@ maps:get(<<"name">>, ASN).            %% => <<"Google LLC">>
 Threat = maps:get(<<"threat">>, Result).
 maps:get(<<"is_vpn">>, Threat).       %% => false
 
+%% Flags the API includes only when they are true: read them with a default
+maps:get(<<"is_anycast">>, Result, false).   %% => true
+maps:get(<<"is_satellite">>, Result, false). %% => false
+
 TimeZone = maps:get(<<"time_zone">>, Result).
 maps:get(<<"name">>, TimeZone).       %% => <<"America/New_York">>
 ```
@@ -201,6 +205,8 @@ Look up multiple IP addresses in a single request. Maximum 100 IPs. Requires a p
 |-------|------|-------------|
 | `ip` | binary | IP address |
 | `is_eu` | boolean | Whether the country is in the EU |
+| `is_satellite` | boolean | Satellite internet provider; present only when `true` |
+| `is_anycast` | boolean | Anycast address; present only when `true` |
 | `city` | binary | City name |
 | `region` | binary | Region/state name |
 | `region_code` | binary | Region code |
@@ -226,6 +232,8 @@ Look up multiple IP addresses in a single request. Maximum 100 IPs. Requires a p
 | `threat` | map | Threat data (see below) |
 | `count` | binary | API request count |
 
+The API includes `is_satellite` and `is_anycast` only when they are `true` and omits them otherwise. The library returns the decoded JSON unchanged, so read them with a default: `maps:get(<<"is_satellite">>, Result, false)`. Both names can be requested through the fields parameter like any other field.
+
 ### Threat Fields
 
 | Field | Type | Description |
@@ -240,8 +248,23 @@ Look up multiple IP addresses in a single request. Maximum 100 IPs. Requires a p
 | `is_known_abuser` | boolean | Known abuser |
 | `is_threat` | boolean | Any threat detected |
 | `is_bogon` | boolean | Bogon IP |
-| `blocklists` | list | Blocklist entries (`name`, `site`, `type`) |
+| `blocklists` | list | Blocklist entries (see below) |
 | `scores` | map | Reputation scores (`vpn_score`, `proxy_score`, `threat_score`, `trust_score`) |
+
+### Blocklist Entry Fields
+
+Each element of `blocklists` is a map:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `name` | binary | Blocklist name |
+| `site` | binary | Blocklist website |
+| `type` | binary | Blocklist type (for example `vpn`, `cloud`, `general`) |
+| `first_seen` | binary | First day the IP was listed, `YYYY-MM-DD` (UTC); optional |
+| `last_seen` | binary | Last day the IP was listed, `YYYY-MM-DD` (UTC); optional |
+| `days_seen` | integer | Number of days the IP was listed; optional |
+
+Some feeds, for example ipdata's own `vpn` feed, carry none of `first_seen`, `last_seen` and `days_seen`, so read them with a default such as `maps:get(<<"days_seen">>, Entry, undefined)`. The dates are returned as binaries and are not parsed.
 
 ## Testing
 
