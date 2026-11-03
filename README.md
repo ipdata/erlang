@@ -274,6 +274,10 @@ Some feeds, for example ipdata's own `vpn` feed, carry none of `first_seen`, `la
 rebar3 ct
 ```
 
+## Releasing
+
+Bump `vsn` in `src/ipdata.app.src` in a pull request and merge it. CI then tags the merge commit `vx.y.z`, creates the GitHub release and publishes the package and its documentation to [Hex.pm](https://hex.pm/packages/ipdata). A merge whose version is already tagged publishes nothing.
+
 ## License
 
 MIT - see [LICENSE](LICENSE) for details.
