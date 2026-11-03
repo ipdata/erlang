@@ -1,6 +1,6 @@
 {application, ipdata, [
     {description, "Erlang client library for the ipdata.co IP geolocation API"},
-    {vsn, "1.0.1"},
+    {vsn, "1.1.0"},
     {registered, [ipdata_sup]},
     {mod, {ipdata_app, []}},
     {applications, [
@@ -11,7 +11,7 @@
         public_key,
         jsx
     ]},
-    {env, []},
+    {env, [{httpc_options, []}]},
     {modules, []},
     {licenses, ["MIT"]},
     {links, [

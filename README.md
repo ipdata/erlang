@@ -14,6 +14,7 @@ Official Erlang client library for the [ipdata.co](https://ipdata.co) IP geoloca
 - Bulk lookups (up to 100 IPs per request)
 - Field filtering to reduce response size
 - EU endpoint support for data residency
+- Persistent HTTPS connections (HTTP/1.1 keep-alive) through a dedicated `httpc` profile
 - Production-ready with proper TLS verification and error handling
 
 ## Requirements
@@ -27,14 +28,14 @@ Add `ipdata` to your `rebar.config` dependencies:
 
 ```erlang
 {deps, [
-    {ipdata, "~> 1.0"}
+    {ipdata, "~> 1.1"}
 ]}.
 ```
 
 ## Quick Start
 
 ```erlang
-%% Start the application
+%% Start the application (it owns the pool of persistent connections)
 application:ensure_all_started(ipdata).
 
 %% Create a client with your API key
@@ -136,6 +137,28 @@ case ipdata:lookup(Client, <<"8.8.8.8">>) of
         io:format("JSON parse error: ~p~n", [Reason])
 end.
 ```
+
+## Connection reuse
+
+The `ipdata` application owns a dedicated `httpc` profile, also named `ipdata`, that keeps persistent HTTPS connections (HTTP/1.1 keep-alive) to the API for as long as the application runs. Start the application once per node and keep it running: every lookup from every process then goes out on an already established connection instead of paying a new TCP and TLS handshake (roughly 660 to 980 ms for a cold connection to api.ipdata.co against 220 to 300 ms for a request on a reused one). Idle connections are closed after 60 seconds. HTTP/2 is not available with `httpc`, so the saving is the TLS handshake, not multiplexing; an HTTP/2 client such as `gun` would need a connection-owner process and a new client lifecycle, which is out of scope for this library. TLS 1.3 session tickets are enabled so that a connection opened after the idle timeout can resume the previous TLS session.
+
+A client map returned by `ipdata:new/1,2` is plain immutable data: it holds no process, socket or other resource, so it can be shared freely between processes, kept in application state or rebuilt at any time, and there is nothing to close. `application:stop(ipdata)` stops the profile and closes its connections. If a request is made before the application has been started, the profile is started on demand (`inets` and `ssl` must be running).
+
+The profile is tuned through the `httpc_options` key of the `ipdata` application environment, for example in `sys.config`:
+
+```erlang
+[{ipdata, [
+    {httpc_options, [
+        {max_sessions, 16},          %% persistent connections per host (default 16)
+        {max_keep_alive_length, 4},  %% outstanding requests per connection (default 4)
+        {keep_alive_timeout, 60000}  %% close a connection idle for this long, in ms (default 60000)
+    ]}
+]}].
+```
+
+Each entry overrides the default of the same name, and any other `httpc:set_options/2` option (for example `https_proxy`) can be added. The options are applied when the application starts.
+
+A bulk lookup is a POST, so it is retried exactly once if the server closed the connection before answering (`socket_closed_remotely`); `httpc` has already discarded that connection, so the retry goes out on a fresh one. HTTP error statuses are never retried.
 
 ## API Reference
 
