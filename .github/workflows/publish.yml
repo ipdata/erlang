@@ -11,10 +11,19 @@ on:
 jobs:
   test:
     name: Test
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        otp: ['25', '26', '27']
+        # ubuntu-latest resolves to Ubuntu 26.04, for which no OTP 25 builds
+        # are published (erlef/setup-beam supports OTP 26+ there and 24.3+ on
+        # ubuntu-24.04), so the OTP 25 job runs on ubuntu-24.04.
+        include:
+          - otp: '25'
+            os: ubuntu-24.04
+          - otp: '26'
+            os: ubuntu-latest
+          - otp: '27'
+            os: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
