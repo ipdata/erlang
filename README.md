@@ -79,23 +79,25 @@ maps:get(<<"country_name">>, Result).
 %% Access response fields
 maps:get(<<"ip">>, Result).           %% => <<"8.8.8.8">>
 maps:get(<<"country_name">>, Result). %% => <<"United States">>
-maps:get(<<"city">>, Result).         %% => <<"Ashburn">>
-maps:get(<<"latitude">>, Result).     %% => 39.03
-maps:get(<<"longitude">>, Result).    %% => -77.5
+maps:get(<<"country_code">>, Result). %% => <<"US">>
+
+%% Fields the API has no data for are null. 8.8.8.8 is an anycast address
+%% located at country level only, so it has no city and country-level coordinates.
+maps:get(<<"city">>, Result).         %% => null
+maps:get(<<"latitude">>, Result).     %% => 39.7599983215332
+maps:get(<<"longitude">>, Result).    %% => -98.5
 
 %% Nested data
 ASN = maps:get(<<"asn">>, Result).
 maps:get(<<"name">>, ASN).            %% => <<"Google LLC">>
 
 Threat = maps:get(<<"threat">>, Result).
-maps:get(<<"is_vpn">>, Threat).       %% => false
+maps:get(<<"is_vpn">>, Threat).        %% => false
+maps:get(<<"is_datacenter">>, Threat). %% => true
 
 %% Flags the API includes only when they are true: read them with a default
 maps:get(<<"is_anycast">>, Result, false).   %% => true
 maps:get(<<"is_satellite">>, Result, false). %% => false
-
-TimeZone = maps:get(<<"time_zone">>, Result).
-maps:get(<<"name">>, TimeZone).       %% => <<"America/New_York">>
 ```
 
 ### Filter Response Fields
